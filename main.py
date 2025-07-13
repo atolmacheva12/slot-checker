@@ -1,10 +1,11 @@
-import requests
 import os
+import time
+import requests
+from bs4 import BeautifulSoup
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-
-URL = "https://www.eestipiir.ee/yphis/viewQueueTimes.action"
+URL = "https://www.eestipiir.ee/yphis/borderQueueInfo.action"
 
 def send_telegram_message(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -19,30 +20,38 @@ def send_telegram_message(message):
 
 def check_slots():
     try:
-        headers = {
-           "User-Agent": "Mozilla/5.0",
-           "Accept": "application/json"
-        }
-        response = requests.get(URL, headers=headers, timeout=30)
-        data = response.json()
+        response = requests.get(URL, timeout=30)
+        if response.status_code != 200:
+            print("Ошибка запроса:", response.status_code)
+            return
     except Exception as e:
-        print("Ошибка при получении JSON:", e)
+        print("Ошибка при запросе:", e)
         return
 
-    found = False
-    for checkpoint in data:
-        name = checkpoint.get("name")
-        queueTimes = checkpoint.get("queueTimes", [])
-        for row in queueTimes:
-            if row.get("title", "").lower() == "first available pre-reservation time":
-                slot_d = row.get("D")
-                if slot_d and slot_d.lower() != "not available":
-                    message = f"[{name}] Категория D: первый слот — {slot_d}"
-                    print(message)
-                    send_telegram_message(message)
-                    found = True
-    if not found:
-        print("Нет доступных слотов для категории D")
+    soup = BeautifulSoup(response.text, "html.parser")
+    table = soup.find("table", {"class": "borderQueueTable"})
+    if not table:
+        print("Не найдена таблица с данными")
+        return
 
-if __name__ == "__main__":
+    rows = table.find_all("tr")
+    for row in rows:
+        cells = row.find_all("td")
+        if not cells:
+            continue
+        if "first available pre-reservation time" in row.get_text().lower():
+            if len(cells) >= 4:
+                d_cell = cells[3].get_text(strip=True)
+                if d_cell:
+                    print("Найдено значение в колонке D:", d_cell)
+                    send_telegram_message(f"Свободное время для категории D: {d_cell}")
+                else:
+                    print("Ячейка D пуста")
+            else:
+                print("Недостаточно колонок в строке")
+            break
+
+while True:
+    print("СКРИПТ ЗАПУЩЕН")
     check_slots()
+    time.sleep(80)
