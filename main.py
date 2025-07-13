@@ -1,5 +1,4 @@
 import os
-import time
 import requests
 from bs4 import BeautifulSoup
 
@@ -42,16 +41,14 @@ def check_slots():
         if "first available pre-reservation time" in row.get_text().lower():
             if len(cells) >= 4:
                 d_cell = cells[3].get_text(strip=True)
-                if d_cell:
+                if d_cell and d_cell.lower() != "not available":
                     print("Найдено значение в колонке D:", d_cell)
                     send_telegram_message(f"Свободное время для категории D: {d_cell}")
                 else:
-                    print("Ячейка D пуста")
+                    print("Ячейка D пуста или недоступна")
             else:
                 print("Недостаточно колонок в строке")
             break
 
-while True:
-    print("СКРИПТ ЗАПУЩЕН")
+if __name__ == "__main__":
     check_slots()
-    time.sleep(80)
