@@ -10,7 +10,7 @@ URL = "https://www.eestipiir.ee/yphis/borderQueueInfo.action"
 
 def check_slots():
     try:
-        response = requests.get(URL, timeout=20)
+        response = requests.get(URL, timeout=30)
         if response.status_code != 200:
             print("Ошибка запроса:", response.status_code)
             return
