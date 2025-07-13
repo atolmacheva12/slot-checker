@@ -1,64 +1,64 @@
-print("СКРИПТ ЗАПУЩЕН")
-import time
 import requests
-import telegram
-import os
 from bs4 import BeautifulSoup
 
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+# === НАСТРОЙКИ ===
 URL = "https://www.eestipiir.ee/yphis/borderQueueInfo.action"
 
-def check_slots():
+# Токен и ID Telegram
+TELEGRAM_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"
+TELEGRAM_CHAT_ID = "YOUR_CHAT_ID"
+
+def send_telegram_message(message):
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": message
+    }
     try:
-        response = requests.get(URL, timeout=30)
-        if response.status_code != 200:
-            print("Ошибка запроса:", response.status_code)
-            return
-
-        soup = BeautifulSoup(response.text, "html.parser")
-
-        table = soup.find('table', {'class': 'borderQueueTable'})
-        if not table:
-            print("Не найдена таблица с данными")
-            return
-
-        headers = [th.text.strip() for th in table.find_all('th')]
-        ab_columns_indices = [i for i, h in enumerate(headers) if 'A/B' in h]
-
-        if not ab_columns_indices:
-            print("Не найдены столбцы с 'A/B'")
-            return
-
-        first_available_row = None
-        for tr in table.find_all('tr'):
-            tds = tr.find_all(['th', 'td'])
-            if tds and 'First available pre-reservation time' in tds[0].text:
-                first_available_row = tds
-                break
-
-        if not first_available_row:
-            print("Не найдена строка 'First available pre-reservation time'")
-            return
-
-        messages = []
-        for idx in ab_columns_indices:
-            time_val = first_available_row[idx].text.strip()
-            if time_val:
-                place_name = headers[idx]
-                messages.append(f"🟢 Есть свободный таймслот в {place_name}: {time_val}")
-
-        if messages:
-            bot = telegram.Bot(token=TELEGRAM_TOKEN)
-            for msg in messages:
-                bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=msg)
-                print("Отправлено сообщение:", msg)
-        else:
-            print("Свободных таймслотов нет в колонках A/B")
-
+        requests.post(url, data=payload)
     except Exception as e:
-        print("Ошибка:", e)
+        print(f"Ошибка при отправке в Telegram: {e}")
 
-while True:
+def check_slots():
+    response = requests.get(URL)
+    soup = BeautifulSoup(response.text, "html.parser")
+    table = soup.find("table", {"class": "borderQueueTable"})
+
+    if not table:
+        print("Не найдена таблица с данными")
+        return
+
+    # 1. Найти номер колонки D
+    headers = table.find("thead").find_all("th")
+    d_index = None
+    for idx, th in enumerate(headers):
+        if th.text.strip() == "D":
+            d_index = idx
+            break
+
+    if d_index is None:
+        print("Не найдена колонка D")
+        return
+
+    # 2. Найти строку 'First available pre-reservation time'
+    for row in table.find("tbody").find_all("tr"):
+        first_cell = row.find("th") or row.find("td")
+        if not first_cell:
+            continue
+        row_title = first_cell.text.strip()
+        if "First available pre-reservation time" in row_title:
+            cells = row.find_all(["td", "th"])
+            if d_index < len(cells):
+                value = cells[d_index].text.strip()
+                if value and value.lower() != "not available":
+                    print(f"Найден слот: {value}")
+                    send_telegram_message(f"Категория D – первый слот: {value}")
+                else:
+                    print("Слот не найден или недоступен")
+                return
+
+    print("Не найдена строка с 'First available pre-reservation time'")
+
+# === ЗАПУСК ===
+if _name_ == "_main_":
     check_slots()
-    time.sleep(80)
