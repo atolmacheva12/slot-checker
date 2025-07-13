@@ -1,12 +1,10 @@
 import requests
-from bs4 import BeautifulSoup
+import os
 
-# === НАСТРОЙКИ ===
-URL = "https://www.eestipiir.ee/yphis/borderQueueInfo.action"
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-# Токен и ID Telegram
-TELEGRAM_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"
-TELEGRAM_CHAT_ID = "YOUR_CHAT_ID"
+URL = "https://www.eestipiir.ee/yphis/viewQueueTimes.action"
 
 def send_telegram_message(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -20,45 +18,27 @@ def send_telegram_message(message):
         print(f"Ошибка при отправке в Telegram: {e}")
 
 def check_slots():
-    response = requests.get(URL)
-    soup = BeautifulSoup(response.text, "html.parser")
-    table = soup.find("table", {"class": "borderQueueTable"})
-
-    if not table:
-        print("Не найдена таблица с данными")
+    try:
+        response = requests.get(URL, timeout=20)
+        data = response.json()
+    except Exception as e:
+        print("Ошибка при получении JSON:", e)
         return
 
-    # 1. Найти номер колонки D
-    headers = table.find("thead").find_all("th")
-    d_index = None
-    for idx, th in enumerate(headers):
-        if th.text.strip() == "D":
-            d_index = idx
-            break
+    found = False
+    for checkpoint in data:
+        name = checkpoint.get("name")
+        queueTimes = checkpoint.get("queueTimes", [])
+        for row in queueTimes:
+            if row.get("title", "").lower() == "first available pre-reservation time":
+                slot_d = row.get("D")
+                if slot_d and slot_d.lower() != "not available":
+                    message = f"[{name}] Категория D: первый слот — {slot_d}"
+                    print(message)
+                    send_telegram_message(message)
+                    found = True
+    if not found:
+        print("Нет доступных слотов для категории D")
 
-    if d_index is None:
-        print("Не найдена колонка D")
-        return
-
-    # 2. Найти строку 'First available pre-reservation time'
-    for row in table.find("tbody").find_all("tr"):
-        first_cell = row.find("th") or row.find("td")
-        if not first_cell:
-            continue
-        row_title = first_cell.text.strip()
-        if "First available pre-reservation time" in row_title:
-            cells = row.find_all(["td", "th"])
-            if d_index < len(cells):
-                value = cells[d_index].text.strip()
-                if value and value.lower() != "not available":
-                    print(f"Найден слот: {value}")
-                    send_telegram_message(f"Категория D – первый слот: {value}")
-                else:
-                    print("Слот не найден или недоступен")
-                return
-
-    print("Не найдена строка с 'First available pre-reservation time'")
-
-# === ЗАПУСК ===
 if __name__ == "__main__":
     check_slots()
