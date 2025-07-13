@@ -19,7 +19,11 @@ def send_telegram_message(message):
 
 def check_slots():
     try:
-        response = requests.get(URL, timeout=20)
+        headers = {
+    "User-Agent": "Mozilla/5.0",
+    "Accept": "application/json"
+}
+response = requests.get(URL, headers=headers, timeout=30)
         data = response.json()
     except Exception as e:
         print("Ошибка при получении JSON:", e)
