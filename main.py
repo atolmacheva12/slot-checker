@@ -1,3 +1,4 @@
+print("СКРИПТ ЗАПУЩЕН")
 import time
 import requests
 import telegram
