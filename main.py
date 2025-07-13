@@ -60,5 +60,5 @@ def check_slots():
     print("Не найдена строка с 'First available pre-reservation time'")
 
 # === ЗАПУСК ===
-if _name_ == "_main_":
+if __name__ == "__main__":
     check_slots()
